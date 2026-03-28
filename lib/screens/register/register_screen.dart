@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+
 import 'package:my_project/app/app_routes.dart';
+import 'package:my_project/widgets/app_scaffold.dart';
 import 'package:my_project/widgets/app_text_field.dart';
 import 'package:my_project/widgets/auth_footer_link.dart';
 import 'package:my_project/widgets/primary_button.dart';
-import 'package:my_project/widgets/app_scaffold.dart';
 
 class RegisterScreen extends StatelessWidget {
   const RegisterScreen({super.key});
@@ -22,30 +23,16 @@ class RegisterScreen extends StatelessWidget {
           const SizedBox(height: 12),
           const Text('Create your account'),
           const SizedBox(height: 16),
-          AppTextField(
-            label: 'Name',
-            hint: 'John Doe',
-            controller: name,
-          ),
+          AppTextField(label: 'Name', hint: 'John Doe', controller: name),
           const SizedBox(height: 12),
-          AppTextField(
-            label: 'Email',
-            hint: 'you@mail.com',
-            controller: email,
-          ),
+          AppTextField(label: 'Email', hint: 'you@mail.com', controller: email),
           const SizedBox(height: 12),
-          AppTextField(
-            label: 'Password',
-            obscure: true,
-            controller: pass,
-          ),
+          AppTextField(label: 'Password', obscure: true, controller: pass),
           const SizedBox(height: 16),
           PrimaryButton(
             text: 'Create account',
             onPressed: () {
-              Navigator.of(context).pushReplacementNamed(
-                AppRoutes.login,
-              );
+              Navigator.of(context).pushReplacementNamed(AppRoutes.login);
             },
           ),
           const SizedBox(height: 8),
@@ -53,9 +40,7 @@ class RegisterScreen extends StatelessWidget {
             prompt: 'Already have an account?',
             actionText: 'Sign in',
             onTap: () {
-              Navigator.of(context).pushReplacementNamed(
-                AppRoutes.login,
-              );
+              Navigator.of(context).pushReplacementNamed(AppRoutes.login);
             },
           ),
         ],

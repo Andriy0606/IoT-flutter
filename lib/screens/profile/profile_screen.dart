@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'package:my_project/app/app_routes.dart';
-import 'package:my_project/widgets/section_card.dart';
 import 'package:my_project/widgets/app_scaffold.dart';
+import 'package:my_project/widgets/section_card.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -14,11 +15,11 @@ class ProfileScreen extends StatelessWidget {
         children: <Widget>[
           const _Header(),
           const SizedBox(height: 16),
-          SectionCard(
+          const SectionCard(
             title: 'Account',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const <Widget>[
+              children: <Widget>[
                 _Line(title: 'Name', value: 'John Doe'),
                 SizedBox(height: 8),
                 _Line(title: 'Email', value: 'john@doe.dev'),
@@ -43,14 +44,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        const CircleAvatar(
-          radius: 28,
-          child: Icon(Icons.person),
-        ),
+        const CircleAvatar(radius: 28, child: Icon(Icons.person)),
         const SizedBox(width: 12),
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const <Widget>[
+          children: <Widget>[
             Text('John Doe'),
             SizedBox(height: 2),
             Text('john@doe.dev'),
@@ -90,4 +88,3 @@ class _Line extends StatelessWidget {
     );
   }
 }
-

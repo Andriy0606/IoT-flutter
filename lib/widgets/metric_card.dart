@@ -35,11 +35,7 @@ class MetricCard extends StatelessWidget {
                   FittedBox(
                     alignment: Alignment.centerLeft,
                     fit: BoxFit.scaleDown,
-                    child: Text(
-                      value,
-                      style: valueStyle,
-                      maxLines: 1,
-                    ),
+                    child: Text(value, style: valueStyle, maxLines: 1),
                   ),
                 ],
               ),

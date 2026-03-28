@@ -18,12 +18,8 @@ class AuthFooterLink extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
         Text(prompt),
-        TextButton(
-          onPressed: onTap,
-          child: Text(actionText),
-        ),
+        TextButton(onPressed: onTap, child: Text(actionText)),
       ],
     );
   }
 }
-

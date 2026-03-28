@@ -30,7 +30,6 @@ class RoomHeader extends StatelessWidget {
         ),
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
               Text('Room', style: subtitleStyle),
               Text(roomName, style: titleStyle),
