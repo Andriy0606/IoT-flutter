@@ -4,6 +4,8 @@ import 'package:my_project/data/local/user_local_data_source.dart';
 import 'package:my_project/data/repositories/user_repository_impl.dart';
 import 'package:my_project/domain/repositories/user_repository.dart';
 import 'package:my_project/domain/services/auth_service.dart';
+import 'package:my_project/domain/services/connectivity_service.dart';
+import 'package:my_project/domain/services/mqtt_temperature_service.dart';
 import 'package:my_project/domain/validation/validators.dart';
 
 final class AppDi {
@@ -30,4 +32,14 @@ final class AppDi {
     userRepository: userRepository,
     sessionStorage: sessionStorage,
   );
+
+  static final ConnectivityService connectivityService =
+      ConnectivityServiceImpl();
+
+  static final MqttTemperatureService mqttTemperatureService =
+      MqttTemperatureServiceImpl(
+        host: 'broker.hivemq.com',
+        clientId: 'flutter_room_state_client',
+        topic: 'sensor/temperature',
+      );
 }

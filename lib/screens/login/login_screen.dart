@@ -37,6 +37,19 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorText = null;
     });
 
+    final hasInternet = await AppDi.connectivityService.hasInternet();
+    if (!mounted) return;
+    if (!hasInternet) {
+      setState(() {
+        _isLoading = false;
+        _errorText = 'No Internet connection.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No Internet connection.')),
+      );
+      return;
+    }
+
     final result = await AppDi.authService.login(
       email: _email.text,
       password: _pass.text,
