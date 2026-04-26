@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:my_project/app/app_routes.dart';
-import 'package:my_project/app/di.dart';
 import 'package:my_project/domain/models/room_snapshot.dart';
-import 'package:my_project/screens/home/home_mqtt_mixin.dart';
+import 'package:my_project/state/mqtt/mqtt_cubit.dart';
+import 'package:my_project/state/mqtt/mqtt_state.dart';
+import 'package:my_project/state/rooms/rooms_cubit.dart';
+import 'package:my_project/state/rooms/rooms_state.dart';
 import 'package:my_project/widgets/app_scaffold.dart';
 import 'package:my_project/widgets/broker_status_card.dart';
 import 'package:my_project/widgets/metric_card.dart';
@@ -11,30 +13,8 @@ import 'package:my_project/widgets/metrics_grid.dart';
 import 'package:my_project/widgets/offline_banner.dart';
 import 'package:my_project/widgets/room_header.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen>
-    with HomeMqttMixin<HomeScreen> {
-  int _roomIndex = 0;
-  late Future<List<RoomSnapshot>> _roomsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _roomsFuture = AppDi.roomRepository.fetchRooms();
-    bootstrapMqtt();
-  }
-
-  @override
-  void dispose() {
-    disposeMqtt();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,33 +31,40 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ],
       ),
-      child: FutureBuilder<List<RoomSnapshot>>(
-        future: _roomsFuture,
-        builder: (context, snapshot) {
-          final rooms = snapshot.data ?? const <RoomSnapshot>[];
-          if (snapshot.connectionState != ConnectionState.done) {
+      child: BlocBuilder<RoomsCubit, RoomsState>(
+        builder: (context, roomsState) {
+          if (roomsState is RoomsLoading) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
+
+          final (rooms, selectedIndex) = switch (roomsState) {
+            RoomsLoaded(:final rooms, :final selectedIndex) => (
+              rooms,
+              selectedIndex,
+            ),
+            RoomsError(:final cachedRooms, :final selectedIndex) => (
+              cachedRooms,
+              selectedIndex,
+            ),
+            _ => (const <RoomSnapshot>[], 0),
+          };
+
+          if (rooms.isEmpty) {
+            final msg = roomsState is RoomsError ? roomsState.message : null;
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    const Text('Failed to load rooms from API.'),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${snapshot.error}',
-                      textAlign: TextAlign.center,
-                    ),
+                    const Text('No cached room data yet.'),
+                    if (msg != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text(msg, textAlign: TextAlign.center),
+                    ],
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: () {
-                        setState(() {
-                          _roomsFuture = AppDi.roomRepository.fetchRooms();
-                        });
-                      },
+                      onPressed: () => context.read<RoomsCubit>().load(),
                       child: const Text('Retry'),
                     ),
                   ],
@@ -85,63 +72,67 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             );
           }
-          if (rooms.isEmpty) {
-            return const Center(child: Text('No cached room data yet.'));
-          }
 
-          final safeIndex = _roomIndex.clamp(0, rooms.length - 1);
+          final safeIndex = selectedIndex.clamp(0, rooms.length - 1);
           final room = rooms[safeIndex];
           final canGoPrev = safeIndex > 0;
           final canGoNext = safeIndex < rooms.length - 1;
 
-          final temperatureValue = hasInternet
-              ? (mqttTemp ?? '${room.temperatureC}°C')
-              : '${room.temperatureC}°C';
+          return BlocBuilder<MqttCubit, MqttState>(
+            builder: (context, mqtt) {
+              final temperatureValue = mqtt.hasInternet
+                  ? (mqtt.temperature ?? '${room.temperatureC}°C')
+                  : '${room.temperatureC}°C';
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: BrokerStatusCard(broker: broker, mqttTemp: mqttTemp),
-              ),
-              if (!hasInternet)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: OfflineBanner(),
-                ),
-              RoomHeader(
-                roomName: room.name,
-                canGoPrev: canGoPrev,
-                canGoNext: canGoNext,
-                onPrev: () => setState(() => _roomIndex = safeIndex - 1),
-                onNext: () => setState(() => _roomIndex = safeIndex + 1),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: MetricsGrid(
-                  children: <Widget>[
-                    MetricCard(
-                      label: 'Temperature',
-                      value: temperatureValue,
-                      icon: Icons.thermostat,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: BrokerStatusCard(
+                      broker: mqtt.broker,
+                      mqttTemp: mqtt.temperature,
                     ),
-                    MetricCard(
-                      label: 'Humidity',
-                      value: '${room.humidityPercent}%',
-                      icon: Icons.water_drop,
+                  ),
+                  if (!mqtt.hasInternet)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: OfflineBanner(),
                     ),
-                    MetricCard(
-                      label: 'Light',
-                      value: room.isLightOn ? 'ON' : 'OFF',
-                      icon: room.isLightOn
-                          ? Icons.lightbulb
-                          : Icons.lightbulb_outline,
+                  RoomHeader(
+                    roomName: room.name,
+                    canGoPrev: canGoPrev,
+                    canGoNext: canGoNext,
+                    onPrev: () => context.read<RoomsCubit>().selectPrev(),
+                    onNext: () => context.read<RoomsCubit>().selectNext(),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: MetricsGrid(
+                      children: <Widget>[
+                        MetricCard(
+                          label: 'Temperature',
+                          value: temperatureValue,
+                          icon: Icons.thermostat,
+                        ),
+                        MetricCard(
+                          label: 'Humidity',
+                          value: '${room.humidityPercent}%',
+                          icon: Icons.water_drop,
+                        ),
+                        MetricCard(
+                          label: 'Light',
+                          value: room.isLightOn ? 'ON' : 'OFF',
+                          icon: room.isLightOn
+                              ? Icons.lightbulb
+                              : Icons.lightbulb_outline,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           );
         },
       ),

@@ -64,4 +64,6 @@ final class AppDi {
     remote: _roomRemote,
     local: _roomLocal,
   );
+
+  static RoomLocalDataSource get roomLocalDataSource => _roomLocal;
 }

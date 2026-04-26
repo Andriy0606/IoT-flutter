@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:my_project/app/app_routes.dart';
-import 'package:my_project/app/di.dart';
-import 'package:my_project/domain/common/result.dart';
+import 'package:my_project/state/auth/auth_cubit.dart';
+import 'package:my_project/state/auth/auth_state.dart';
 import 'package:my_project/widgets/app_scaffold.dart';
 import 'package:my_project/widgets/app_text_field.dart';
 import 'package:my_project/widgets/auth_footer_link.dart';
@@ -20,9 +21,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _pass = TextEditingController();
 
-  bool _isLoading = false;
-  String? _errorText;
-
   @override
   void dispose() {
     _name.dispose();
@@ -32,79 +30,77 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorText = null;
-    });
-
-    final result = await AppDi.authService.register(
+    await context.read<AuthCubit>().register(
       name: _name.text,
       email: _email.text,
       password: _pass.text,
     );
-
-    if (!mounted) return;
-
-    if (result is Err<void>) {
-      final message = result.failure.message;
-      setState(() {
-        _isLoading = false;
-        _errorText = message;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      appBar: AppBar(title: const Text('Register')),
-      maxWidth: 420,
-      child: ListView(
-        children: <Widget>[
-          const SizedBox(height: 12),
-          const Text('Create your account'),
-          const SizedBox(height: 16),
-          AppTextField(label: 'Name', hint: 'John Doe', controller: _name),
-          const SizedBox(height: 12),
-          AppTextField(
-            label: 'Email',
-            hint: 'you@mail.com',
-            controller: _email,
-          ),
-          const SizedBox(height: 12),
-          AppTextField(label: 'Password', obscure: true, controller: _pass),
-          const SizedBox(height: 16),
-          PrimaryButton(
-            text: _isLoading ? 'Creating...' : 'Create account',
-            onPressed: _submit,
-          ),
-          if (_errorText != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              _errorText!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+    return BlocListener<AuthCubit, AuthState>(
+      listenWhen: (prev, next) => prev.isSuccess != next.isSuccess,
+      listener: (context, state) {
+        if (!state.isSuccess) return;
+        context.read<AuthCubit>().reset();
+        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+      },
+      child: BlocBuilder<AuthCubit, AuthState>(
+        builder: (context, state) {
+          final errorText = state.errorMessage;
+          return AppScaffold(
+            appBar: AppBar(title: const Text('Register')),
+            maxWidth: 420,
+            child: ListView(
+              children: <Widget>[
+                const SizedBox(height: 12),
+                const Text('Create your account'),
+                const SizedBox(height: 16),
+                AppTextField(
+                  label: 'Name',
+                  hint: 'John Doe',
+                  controller: _name,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Email',
+                  hint: 'you@mail.com',
+                  controller: _email,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  label: 'Password',
+                  obscure: true,
+                  controller: _pass,
+                ),
+                const SizedBox(height: 16),
+                PrimaryButton(
+                  text: state.isLoading ? 'Creating...' : 'Create account',
+                  onPressed: state.isLoading ? null : _submit,
+                ),
+                if (errorText != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(
+                    errorText,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                AuthFooterLink(
+                  prompt: 'Already have an account?',
+                  actionText: 'Sign in',
+                  onTap: () {
+                    context.read<AuthCubit>().reset();
+                    Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+                  },
+                ),
+              ],
             ),
-          ],
-          const SizedBox(height: 8),
-          AuthFooterLink(
-            prompt: 'Already have an account?',
-            actionText: 'Sign in',
-            onTap: () {
-              Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-            },
-          ),
-        ],
+          );
+        },
       ),
     );
   }

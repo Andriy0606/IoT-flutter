@@ -2,6 +2,7 @@ import 'package:my_project/data/local/room_local_data_source.dart';
 import 'package:my_project/data/remote/room_remote_data_source.dart';
 import 'package:my_project/domain/models/room_snapshot.dart';
 import 'package:my_project/domain/repositories/room_repository.dart';
+
 final class RoomRepositoryImpl implements RoomRepository {
   const RoomRepositoryImpl({
     required RoomRemoteDataSource remote,

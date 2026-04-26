@@ -1,361 +1,175 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:my_project/app/app_routes.dart';
-import 'package:my_project/app/di.dart';
-import 'package:my_project/domain/common/result.dart';
-import 'package:my_project/domain/models/user.dart';
 import 'package:my_project/domain/services/mqtt_temperature_service.dart';
+import 'package:my_project/screens/profile/profile_edit_form.dart';
+import 'package:my_project/state/mqtt/mqtt_cubit.dart';
+import 'package:my_project/state/mqtt/mqtt_state.dart';
+import 'package:my_project/state/user/user_cubit.dart';
+import 'package:my_project/state/user/user_state.dart';
 import 'package:my_project/widgets/app_scaffold.dart';
-import 'package:my_project/widgets/app_text_field.dart';
-import 'package:my_project/widgets/editable_section.dart';
-import 'package:my_project/widgets/key_value_row.dart';
 import 'package:my_project/widgets/section_card.dart';
 import 'package:my_project/widgets/user_header.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  User? _user;
-  bool _isLoading = true;
-  bool _isEditing = false;
-  bool _isSaving = false;
-  String? _errorText;
-
-  late final SwitchableMqttTemperatureService _mqtt =
-      AppDi.mqttTemperatureService;
-  StreamSubscription<MqttBroker>? _mqttBrokerSub;
-  MqttBroker _mqttBroker = AppDi.mqttTemperatureService.broker;
-  bool _isSwitchingBroker = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _bootstrap();
-  }
-
-  final TextEditingController _name = TextEditingController();
-  final TextEditingController _email = TextEditingController();
-  final TextEditingController _pass = TextEditingController();
-
-  @override
-  void dispose() {
-    _mqttBrokerSub?.cancel();
-    _name.dispose();
-    _email.dispose();
-    _pass.dispose();
-    super.dispose();
-  }
-
-  Future<void> _bootstrap() async {
-    await _mqtt.init();
-    if (!mounted) return;
-    _mqttBroker = _mqtt.broker;
-    _mqttBrokerSub?.cancel();
-    _mqttBrokerSub = _mqtt.watchBroker().listen((broker) {
-      if (!mounted) return;
-      setState(() => _mqttBroker = broker);
-    });
-
-    final user = await AppDi.userRepository.readUser();
-    if (!mounted) return;
-    setState(() {
-      _user = user;
-      _isLoading = false;
-    });
-    _syncControllersFromUser();
-  }
-
-  void _syncControllersFromUser() {
-    final user = _user;
-    if (user == null) return;
-    _name.text = user.name;
-    _email.text = user.email;
-    _pass.text = user.password;
-  }
-
-  void _toggleEdit() {
-    setState(() {
-      _isEditing = !_isEditing;
-      _errorText = null;
-    });
-    if (_isEditing) {
-      _syncControllersFromUser();
-    }
-  }
-
-  Future<void> _save() async {
-    if (_isSaving) return;
-
-    setState(() {
-      _isSaving = true;
-      _errorText = null;
-    });
-
-    final result = AppDi.validators.validateRegister(
-      name: _name.text,
-      email: _email.text,
-      password: _pass.text,
-    );
-    if (!mounted) return;
-
-    if (result is Err<void>) {
-      final message = result.failure.message;
-      setState(() {
-        _isSaving = false;
-        _errorText = message;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-
-    final updated = User(
-      name: _name.text.trim(),
-      email: _email.text.trim(),
-      password: _pass.text,
-    );
-
-    await AppDi.userRepository.saveUser(updated);
-    if (!mounted) return;
-
-    setState(() {
-      _user = updated;
-      _isSaving = false;
-      _isEditing = false;
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Saved')));
-  }
-
-  Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Log out?'),
-          content: const Text('You will need to sign in again to continue.'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Log out'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    await AppDi.authService.logout();
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushNamedAndRemoveUntil(AppRoutes.login, (Route<dynamic> route) => false);
-  }
-
-  Future<void> _deleteUser() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete user?'),
-          content: const Text(
-            'This will remove your saved account from the device.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    await AppDi.userRepository.deleteUser();
-    await AppDi.sessionStorage.logout();
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushNamedAndRemoveUntil(AppRoutes.login, (Route<dynamic> route) => false);
-  }
-
-  Future<void> _toggleBroker(bool useMosquitto) async {
-    if (_isSwitchingBroker) return;
-
-    final target = useMosquitto ? MqttBroker.mosquitto : MqttBroker.hiveMq;
-    if (target == _mqttBroker) return;
-
-    setState(() => _isSwitchingBroker = true);
-    // ignore: avoid_print
-    print('[UI] toggleBroker start current=$_mqttBroker target=$target');
-    try {
-      await _mqtt.setBroker(target);
-      if (!mounted) return;
-      setState(() => _isSwitchingBroker = false);
-      // ignore: avoid_print
-      print('[UI] toggleBroker done now=${_mqtt.broker}');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Broker: ${target.label}')));
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isSwitchingBroker = false);
-      // ignore: avoid_print
-      print('[UI] toggleBroker ERROR');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to switch broker.')));
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final user = _user;
-
     return AppScaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: <Widget>[
-          IconButton(
-            onPressed: _isLoading ? null : _toggleEdit,
-            icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            tooltip: _isEditing ? 'Cancel' : 'Edit',
-          ),
-        ],
-      ),
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              children: <Widget>[
-                UserHeader(
-                  title: user?.name ?? 'No user',
-                  subtitle: user?.email ?? '',
-                  trailing: OutlinedButton(
-                    onPressed: _logout,
-                    child: const Text('Log out'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                EditableSection(
-                  title: 'Account',
-                  isEditing: _isEditing,
-                  readChild: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      KeyValueRow(title: 'Name', value: user?.name ?? ''),
-                      const SizedBox(height: 8),
-                      KeyValueRow(title: 'Email', value: user?.email ?? ''),
-                    ],
-                  ),
-                  editChild: Column(
-                    children: <Widget>[
-                      AppTextField(label: 'Name', controller: _name),
-                      const SizedBox(height: 12),
-                      AppTextField(label: 'Email', controller: _email),
-                      const SizedBox(height: 12),
-                      AppTextField(
-                        label: 'Password',
-                        obscure: true,
-                        controller: _pass,
-                      ),
-                    ],
-                  ),
-                  footer: !_isEditing
-                      ? null
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            FilledButton(
-                              onPressed: _isSaving ? null : _save,
-                              child: Text(_isSaving ? 'Saving...' : 'Save'),
+      appBar: AppBar(title: const Text('Profile')),
+      child: BlocBuilder<UserCubit, UserState>(
+        builder: (context, userState) {
+          if (userState.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final user = userState.user;
+
+          return ListView(
+            children: <Widget>[
+              UserHeader(
+                title: user?.name ?? 'No user',
+                subtitle: user?.email ?? '',
+                trailing: OutlinedButton(
+                  onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final cubit = context.read<UserCubit>();
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: const Text('Log out?'),
+                          content: const Text(
+                            'You will need to sign in again to continue.',
+                          ),
+                          actions: <Widget>[
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: const Text('Cancel'),
                             ),
-                            if (_errorText != null) ...<Widget>[
-                              const SizedBox(height: 8),
-                              Text(
-                                _errorText!,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
+                            FilledButton(
+                              onPressed: () => Navigator.of(context).pop(true),
+                              child: const Text('Log out'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                    if (confirmed != true) return;
+                    await cubit.deleteLocalUser();
+                    if (!context.mounted) return;
+                    navigator.pushNamedAndRemoveUntil(
+                      AppRoutes.login,
+                      (Route<dynamic> route) => false,
+                    );
+                  },
+                  child: const Text('Log out'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const ProfileEditForm(),
+              const SizedBox(height: 12),
+              BlocBuilder<MqttCubit, MqttState>(
+                builder: (context, mqtt) {
+                  return SectionCard(
+                    title: 'MQTT',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Text(
+                          'Active broker',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: <Widget>[
+                            Expanded(child: Text(mqtt.broker.label)),
+                            if (mqtt.isSwitchingBroker) ...<Widget>[
+                              const SizedBox(width: 12),
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
                               ),
                             ],
                           ],
                         ),
-                ),
-                const SizedBox(height: 12),
-                SectionCard(
-                  title: 'MQTT',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      Text(
-                        'Active broker',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: <Widget>[
-                          Expanded(child: Text(_mqttBroker.label)),
-                          if (_isSwitchingBroker) ...<Widget>[
-                            const SizedBox(width: 12),
-                            const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Use EMQX'),
-                        subtitle: const Text('Switches broker with reconnect'),
-                        value: _mqttBroker == MqttBroker.mosquitto,
-                        onChanged: _isSwitchingBroker ? null : _toggleBroker,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SectionCard(
-                  title: 'Danger zone',
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          'Delete local user',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        const SizedBox(height: 12),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Use EMQX'),
+                          subtitle: const Text(
+                            'Switches broker with reconnect',
+                          ),
+                          value: mqtt.broker == MqttBroker.mosquitto,
+                          onChanged: mqtt.isSwitchingBroker
+                              ? null
+                              : (_) => context.read<MqttCubit>().toggleBroker(),
                         ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              SectionCard(
+                title: 'Danger zone',
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        'Delete local user',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      FilledButton.tonal(
-                        onPressed: _deleteUser,
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
+                    ),
+                    FilledButton.tonal(
+                      onPressed: () async {
+                        final navigator = Navigator.of(context);
+                        final cubit = context.read<UserCubit>();
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              title: const Text('Delete user?'),
+                              content: const Text(
+                                'This will remove your saved account from the '
+                                'device.',
+                              ),
+                              actions: <Widget>[
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (confirmed != true) return;
+                        await cubit.deleteLocalUser();
+                        if (!context.mounted) return;
+                        navigator.pushNamedAndRemoveUntil(
+                          AppRoutes.login,
+                          (Route<dynamic> route) => false,
+                        );
+                      },
+                      child: const Text('Delete'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
