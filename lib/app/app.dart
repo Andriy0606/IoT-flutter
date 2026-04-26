@@ -4,6 +4,7 @@ import 'package:my_project/screens/home/home_screen.dart';
 import 'package:my_project/screens/login/login_screen.dart';
 import 'package:my_project/screens/profile/profile_screen.dart';
 import 'package:my_project/screens/register/register_screen.dart';
+import 'package:my_project/screens/splash/splash_screen.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -16,8 +17,9 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      initialRoute: AppRoutes.login,
+      initialRoute: AppRoutes.splash,
       routes: <String, WidgetBuilder>{
+        AppRoutes.splash: (_) => const SplashScreen(),
         AppRoutes.login: (_) => const LoginScreen(),
         AppRoutes.register: (_) => const RegisterScreen(),
         AppRoutes.home: (_) => const HomeScreen(),
