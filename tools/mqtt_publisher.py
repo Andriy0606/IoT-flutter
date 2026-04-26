@@ -1,19 +1,28 @@
 import random
 import time
+import argparse
 
 import paho.mqtt.client as mqtt
 
 
-BROKER_HOST = "broker.hivemq.com"
-BROKER_PORT = 1883
-TOPIC = "sensor/temperature"
-CLIENT_ID = "temp_publisher_lab4"
-INTERVAL_SECONDS = 5
+DEFAULT_BROKER_HOST = "broker.hivemq.com"
+DEFAULT_BROKER_PORT = 1883
+DEFAULT_TOPIC = "sensor/temperature"
+DEFAULT_CLIENT_ID = "temp_publisher_lab4"
+DEFAULT_INTERVAL_SECONDS = 5
 
 
 def main() -> None:
-    client = mqtt.Client(client_id=CLIENT_ID, protocol=mqtt.MQTTv311)
-    client.connect(BROKER_HOST, BROKER_PORT, keepalive=20)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default=DEFAULT_BROKER_HOST)
+    parser.add_argument("--port", type=int, default=DEFAULT_BROKER_PORT)
+    parser.add_argument("--topic", default=DEFAULT_TOPIC)
+    parser.add_argument("--client-id", default=DEFAULT_CLIENT_ID)
+    parser.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS)
+    args = parser.parse_args()
+
+    client = mqtt.Client(client_id=args.client_id, protocol=mqtt.MQTTv311)
+    client.connect(args.host, args.port, keepalive=20)
     client.loop_start()
 
     temperature_c = 22.0
@@ -22,9 +31,9 @@ def main() -> None:
         while True:
             temperature_c += random.uniform(-0.6, 0.6)
             payload = f"{temperature_c:.1f}°C"
-            client.publish(TOPIC, payload, qos=0, retain=False)
-            print(f"Published to {TOPIC}: {payload}")
-            time.sleep(INTERVAL_SECONDS)
+            client.publish(args.topic, payload, qos=0, retain=False)
+            print(f"Published to {args.topic} on {args.host}:{args.port}: {payload}")
+            time.sleep(args.interval)
     except KeyboardInterrupt:
         pass
     finally:

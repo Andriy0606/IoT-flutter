@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:my_project/app/app_routes.dart';
 import 'package:my_project/app/di.dart';
 import 'package:my_project/domain/common/result.dart';
 import 'package:my_project/domain/models/user.dart';
+import 'package:my_project/domain/services/mqtt_temperature_service.dart';
 import 'package:my_project/widgets/app_scaffold.dart';
 import 'package:my_project/widgets/app_text_field.dart';
 import 'package:my_project/widgets/editable_section.dart';
@@ -25,6 +28,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSaving = false;
   String? _errorText;
 
+  late final SwitchableMqttTemperatureService _mqtt =
+      AppDi.mqttTemperatureService;
+  StreamSubscription<MqttBroker>? _mqttBrokerSub;
+  MqttBroker _mqttBroker = AppDi.mqttTemperatureService.broker;
+  bool _isSwitchingBroker = false;
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    _mqttBrokerSub?.cancel();
     _name.dispose();
     _email.dispose();
     _pass.dispose();
@@ -44,6 +54,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _bootstrap() async {
+    await _mqtt.init();
+    if (!mounted) return;
+    _mqttBroker = _mqtt.broker;
+    _mqttBrokerSub?.cancel();
+    _mqttBrokerSub = _mqtt.watchBroker().listen((broker) {
+      if (!mounted) return;
+      setState(() => _mqttBroker = broker);
+    });
+
     final user = await AppDi.userRepository.readUser();
     if (!mounted) return;
     setState(() {
@@ -180,6 +199,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ).pushNamedAndRemoveUntil(AppRoutes.login, (Route<dynamic> route) => false);
   }
 
+  Future<void> _toggleBroker(bool useMosquitto) async {
+    if (_isSwitchingBroker) return;
+
+    final target = useMosquitto ? MqttBroker.mosquitto : MqttBroker.hiveMq;
+    if (target == _mqttBroker) return;
+
+    setState(() => _isSwitchingBroker = true);
+    // ignore: avoid_print
+    print('[UI] toggleBroker start current=$_mqttBroker target=$target');
+    try {
+      await _mqtt.setBroker(target);
+      if (!mounted) return;
+      setState(() => _isSwitchingBroker = false);
+      // ignore: avoid_print
+      print('[UI] toggleBroker done now=${_mqtt.broker}');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Broker: ${target.label}')));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSwitchingBroker = false);
+      // ignore: avoid_print
+      print('[UI] toggleBroker ERROR');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to switch broker.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _user;
@@ -252,6 +300,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ],
                           ],
                         ),
+                ),
+                const SizedBox(height: 12),
+                SectionCard(
+                  title: 'MQTT',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        'Active broker',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: <Widget>[
+                          Expanded(child: Text(_mqttBroker.label)),
+                          if (_isSwitchingBroker) ...<Widget>[
+                            const SizedBox(width: 12),
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Use EMQX'),
+                        subtitle: const Text('Switches broker with reconnect'),
+                        value: _mqttBroker == MqttBroker.mosquitto,
+                        onChanged: _isSwitchingBroker ? null : _toggleBroker,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 SectionCard(

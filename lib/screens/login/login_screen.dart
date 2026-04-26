@@ -44,9 +44,9 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
         _errorText = 'No Internet connection.';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No Internet connection.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No Internet connection.')));
       return;
     }
 
