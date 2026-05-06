@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:my_project/app/app_routes.dart';
 import 'package:my_project/domain/models/room_snapshot.dart';
@@ -12,6 +13,7 @@ import 'package:my_project/widgets/metric_card.dart';
 import 'package:my_project/widgets/metrics_grid.dart';
 import 'package:my_project/widgets/offline_banner.dart';
 import 'package:my_project/widgets/room_header.dart';
+import 'package:torch_toggle_plugin/torch_toggle_plugin.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -120,12 +122,39 @@ class HomeScreen extends StatelessWidget {
                           value: '${room.humidityPercent}%',
                           icon: Icons.water_drop,
                         ),
-                        MetricCard(
-                          label: 'Light',
-                          value: room.isLightOn ? 'ON' : 'OFF',
-                          icon: room.isLightOn
-                              ? Icons.lightbulb
-                              : Icons.lightbulb_outline,
+                        GestureDetector(
+                          onLongPress: () async {
+                            try {
+                              final enabled = await TorchTogglePlugin.onLight();
+                              if (!context.mounted) {
+                                return;
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    enabled ? 'Torch: ON' : 'Torch: OFF',
+                                  ),
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            } on PlatformException catch (e) {
+                              if (!context.mounted) {
+                                return;
+                              }
+                              await _showUnsupportedDialog(
+                                context: context,
+                                message: e.message ?? 'Not supported.',
+                              );
+                            }
+                          },
+                          child: MetricCard(
+                            label: 'Light',
+                            value: room.isLightOn ? 'ON' : 'OFF',
+                            icon: room.isLightOn
+                                ? Icons.lightbulb
+                                : Icons.lightbulb_outline,
+                          ),
                         ),
                       ],
                     ),
@@ -135,6 +164,25 @@ class HomeScreen extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _showUnsupportedDialog({
+    required BuildContext context,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Not supported'),
+        content: Text(message),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }
